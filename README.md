@@ -78,6 +78,62 @@ Open [http://localhost:8000](http://localhost:8000) in your browser.
 
 ---
 
+## Docker Setup & Usage
+
+This project includes a multi-stage Docker setup with four services:
+- **`web`** (`nginx:1.27-alpine`): Serves static/built Vite assets and proxies PHP requests to `app` on port `8080` (configurable via `APP_PORT`).
+- **`app`** (`php:8.4-fpm-alpine`): PHP-FPM 8.4 runtime with Laravel 13, Composer dependencies, and compiled Vite assets.
+- **`queue`** (`php:8.4-fpm-alpine`): Background worker running `php artisan queue:work`.
+- **`db`** (`mysql:8.4`): MySQL 8.4 database with persistent `mysql_data` volume and UTF8MB4 encoding.
+
+### 1. Configure Environment
+Copy the Docker environment template to `.env` and generate an application key:
+```bash
+cp .env.docker.example .env
+```
+
+### 2. Build & Start Containers
+```bash
+docker compose up -d --build
+```
+
+### 3. Initialize Application Key, Database & Demo Data
+Generate `APP_KEY` (if not already set in `.env`), run migrations, and seed the demo data:
+```bash
+# Generate APP_KEY and write it to .env
+KEY=$(docker compose run --rm --no-deps --entrypoint php app artisan key:generate --show | tr -d '\r\n')
+sed -i.bak "s|^APP_KEY=.*|APP_KEY=${KEY}|" .env && rm -f .env.bak
+
+# Restart app & queue to pick up the new APP_KEY
+docker compose up -d app queue
+
+# Run migrations and seed demo data
+docker compose exec app php artisan migrate --seed --force
+```
+
+Open [http://localhost:8080](http://localhost:8080) in your browser.
+
+### Useful Docker Commands
+```bash
+# View container status
+docker compose ps
+
+# Tail application logs
+docker compose logs -f app web queue
+
+# Run Artisan commands
+docker compose exec app php artisan migrate:status
+docker compose exec app php artisan tinker
+
+# Stop containers (preserves database & storage volumes)
+docker compose down
+
+# Stop containers and remove volumes (resets database)
+docker compose down -v
+```
+
+---
+
 ## Pre-Configured Demo Accounts
 
 All demo accounts use password: `password123`
